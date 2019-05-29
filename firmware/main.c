@@ -827,6 +827,11 @@ uchar	usbFunctionSetup(uchar data[8])
 		
 		return 0;		
 	}
+	if (req == 56) /* DHTxx read */
+	{
+		jobState = 33;
+		return 0;
+	}
 #if 0 
 	if ((req & 0xF0) == 0xD0) /* pic24f send bytes */
 	{
@@ -1068,12 +1073,71 @@ unsigned char I2C_Read( unsigned char ack )
 
 // ----------------------------------------------------------------------------
 
+// DHTxx routines
+
+uchar dhtxxReadByte()
+{
+	uchar num = 0;
+	uchar i, timer = 0;
+
+	for (i=0; i<8; i++)
+	{
+		while (!digitalRead(B,DATA_PIN))
+		{
+			delayMicroseconds(1);
+			if (++timer & 0x80)
+				return 0;
+		}
+
+		timer = 0;
+		delayMicroseconds(40);
+
+		if (digitalRead(B,DATA_PIN))
+			num |= 1<<(7-i);
+
+		while (digitalRead(B,DATA_PIN))
+		{
+			delayMicroseconds(1);
+			if (++timer & 0x80)
+				return 0;
+		}
+	}
+
+	return num;
+}
+
+#define DHTXX_RESPONSE_OK	1
+#define DHTXX_ERROR_RESP_L	3
+#define DHTXX_ERROR_RESP_H	4
+
+uchar dhtxxCheckResponse()
+{
+	uchar timer = 0;
+
+	while (!digitalRead(B,DATA_PIN))
+	{
+		delayMicroseconds(1);
+		if (++timer > 82)
+			return DHTXX_ERROR_RESP_L;
+	}
+
+	timer = 0;
+	while (digitalRead(B,DATA_PIN))
+	{
+		delayMicroseconds(1);
+		if (++timer > 82)
+			return DHTXX_ERROR_RESP_H;
+	}
+
+	return DHTXX_RESPONSE_OK;
+}
 
 /* ------------------------------------------------------------------------- */
 /* --------------------------------- main ---------------------------------- */
 /* ------------------------------------------------------------------------- */
 int main(void) {
 	uchar   i;
+	uchar	j = 0;
 	uchar   calibrationValue;
 	
 	DDRB  = RESET_MASK;
@@ -1204,6 +1268,32 @@ int main(void) {
 					}
 				}					
 				jobState=0;
+			break;
+			case 33: /* DHTxx read data */
+
+				sendBuffer[0] = sendBuffer[0] = sendBuffer[0] = sendBuffer[0] = sendBuffer[0] = 0;
+
+				ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+				{
+					digitalWrite(B,DATA_PIN,LOW);
+					_delay_ms(20);
+					digitalWrite(B,DATA_PIN,HIGH);
+					delayMicroseconds(40);
+					pinMode(B,DATA_PIN,INPUT);
+
+					if ((sendBuffer[8] = dhtxxCheckResponse()) == DHTXX_RESPONSE_OK)
+					{
+						sendBuffer[0] = dhtxxReadByte();
+						sendBuffer[1] = dhtxxReadByte();
+						sendBuffer[2] = dhtxxReadByte();
+						sendBuffer[3] = dhtxxReadByte();
+						sendBuffer[4] = dhtxxReadByte();
+						if (sendBuffer[4] == ((sendBuffer[0] + sendBuffer[1] + sendBuffer[2] + sendBuffer[3]) & 0xFF))
+							sendBuffer[8] = 5;
+					}
+
+				}
+				jobState = 0;
 			break;
 			case 4: /* onewire read byte */
 				sendBuffer[0]=0;

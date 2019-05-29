@@ -27,7 +27,8 @@ CFLAGS  = $(USBFLAGS) $(LIBS) -I$(INCLUDE) -O -g $(OSFLAG)
 
 LWLIBS = littleWire littleWire_util littleWire_servo opendevice
 EXAMPLES  = adc blink blink_ws2812 rgb_cycle_ws2812 fade_ws2812 button servo i2c_blinkM
-EXAMPLES += spi_LTC1448 onewire softPWM hardwarePWM debugConsole lwbuttond i2c_nunchuck
+EXAMPLES += spi_LTC1448 onewire softPWM hardwarePWM debugConsole i2c_nunchuck lwbuttond
+DHTXX = dhtxx
 
 .PHONY:	clean library docs
 
@@ -43,6 +44,9 @@ $(EXAMPLES): $(addsuffix .o, $(LWLIBS))
 	@echo Building example: $@...
 	$(CC) $(CFLAGS) -o $@$(EXE_SUFFIX) examples/$@.c $^ $(LIBS)
 
+$(DHTXX): $(addsuffix .o, $(LWLIBS))
+	@echo Building example: $@...
+	$(CC) $(CFLAGS) -o $@$(EXE_SUFFIX) examples/$@.c $^ $(LIBS)
 docs:
 	doxygen ./docs/doxygen.conf
 	cd ./docs/latex/; make all
